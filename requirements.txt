@@ -1,0 +1,15 @@
+pandas
+numpy
+yfinance==0.2.28
+requests
+typing_extensions
+lightgbm
+tqdm
+fastjsonschema
+json5
+jsonschema
+holidays
+pytz
+mysqlclient
+sqlalchemy<2.0
+python-dotenv
