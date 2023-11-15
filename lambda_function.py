@@ -63,7 +63,8 @@ if __name__ == '__main__':
     # Code that, based on the time of the day, return which data/model to run
     from datetime import datetime, time
     now = datetime.now()
-    morning_start = datetime.combine(now.date(), time(6, 30))
+    # Change this for debugging -- should be EST
+    morning_start = datetime.combine(now.date(), time(9, 30))
     delta = now - morning_start
     intervals = max(1,min((delta.total_seconds() / 60 / 30) // 1, 12))
     print(f'running for {str(intervals)}')
