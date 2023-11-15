@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 import lightgbm as lgb
 from sklearn.model_selection import TimeSeriesSplit
@@ -29,29 +30,36 @@ def walk_forward_validation(df, target_column, num_periods, mode='full'):
             predictions = model.predict_proba(X_test)[:,-1]
                 
             # Create a DataFrame to store the true and predicted values
-            result_df = pd.DataFrame({'True': y_test, 'Predicted': predictions}, index=y_test.index)
+            result_df = pd.DataFrame({'IsTrue': y_test, 'Predicted': predictions}, index=y_test.index)
             overall_results.append(result_df)
-        df_results = pd.concat(overall_results)
 
+        df_results = pd.concat(overall_results)
+        
         # Calibrate Probabilities
         def get_quantiles(df, col_name, q):
-            return df.groupby(pd.cut(df[col_name], q))['True'].mean()
+            return df.groupby(pd.cut(df[col_name], q))['IsTrue'].mean()
 
         greenprobas = []
+        pvals = []
         for i, pct in tqdm(enumerate(df_results['Predicted']), desc='Calibrating Probas',total=len(df_results)):
             try:
-                df_q = get_quantiles(df_results.iloc[:i], 'Predicted', 7)
+                df_q = get_quantiles(df_results.iloc[:i], 'Predicted', 10)
                 for q in df_q.index:
                     if q.left <= pct <= q.right:
                         p = df_q[q]
+
+                calib_scores = np.abs(df_results['Predicted'].iloc[:i] - 0.5)
+                score = abs(df_results['Predicted'].iloc[i] - 0.5)
+                pv = np.mean(calib_scores >= score)
             except:
                 p = None
+                pv = None
 
             greenprobas.append(p)
-
+            pvals.append(pv)
+        
         df_results['CalibPredicted'] = greenprobas
-
-        return df_results, model
+        df_results['Pvalue'] = pvals
 
     elif mode == 'single':
         X_train = df.drop(target_column, axis=1).iloc[:-1]
@@ -62,12 +70,10 @@ def walk_forward_validation(df, target_column, num_periods, mode='full'):
         model = lgb.LGBMClassifier(n_estimators=10, random_state=42, verbosity=-1)
         model.fit(X_train, y_train)
         predictions = model.predict_proba(X_test.values.reshape(1, -1))[:,-1]
-        result_df = pd.DataFrame({'True': y_test, 'Predicted': predictions}, index=[df.index[-1]])
+        df_results = pd.DataFrame({'IsTrue': y_test, 'Predicted': predictions}, index=[df.index[-1]])
 
-        return result_df, model
+    return df_results, model
         
-
-    
 
 def seq_predict_proba(df, trained_clf_model):
     clf_pred_proba = trained_clf_model.predict_proba(df[model_cols])[:,-1]

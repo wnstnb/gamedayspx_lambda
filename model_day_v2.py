@@ -3,6 +3,7 @@ from tqdm import tqdm
 from sklearn import linear_model
 import lightgbm as lgb
 from dailyCols import model_cols
+import numpy as np
 
 def walk_forward_validation(df, target_column, num_training_rows, num_periods):
     
@@ -84,22 +85,26 @@ def walk_forward_validation_seq(df, target_column_clf, target_column_regr, num_t
         return df.groupby(pd.cut(df[col_name], q))['True'].mean()
 
     greenprobas = []
-    meanprobas = []
-    for i, pct in tqdm(enumerate(df_results['Predicted']), desc='Calibrating Probas'):
+    pvals = []
+    for i, pct in tqdm(enumerate(df_results['Predicted']), desc='Calibrating Probas',total=len(df_results)):
         try:
-            df_q = get_quantiles(df_results.iloc[:i], 'Predicted', 7)
+            df_q = get_quantiles(df_results.iloc[:i], 'Predicted', 10)
             for q in df_q.index:
                 if q.left <= pct <= q.right:
                     p = df_q[q]
-                    c = (q.left + q.right) / 2
+
+            calib_scores = np.abs(df_results['Predicted'].iloc[:i] - 0.5)
+            score = abs(df_results['Predicted'].iloc[i] - 0.5)
+            pv = np.mean(calib_scores >= score)
         except:
             p = None
-            c = None
+            pv = None
 
         greenprobas.append(p)
-        meanprobas.append(c)
-
+        pvals.append(pv)
+    
     df_results['CalibPredicted'] = greenprobas
+    df_results['Pvalue'] = pvals
     
     return df_results, model1, model2
 

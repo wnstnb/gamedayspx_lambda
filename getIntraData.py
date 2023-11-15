@@ -1,24 +1,13 @@
 import pandas as pd
 import yfinance as yf
 import datetime
-# from datasets import load_dataset
-from sqlalchemy import create_engine
-import os
 from getDailyData import data_start_date
-from dotenv import load_dotenv
-
-# Load environment variables from the .env file
-load_dotenv()
+from dbConn import engine
 
 def get_intra(periods_30m = 1):
     '''
     Method to get historical 30 minute data and append live data to it, if exists. 
     '''
-    engine = create_engine(
-        f"mysql+mysqldb://{os.getenv('DATABASE_USERNAME')}:" \
-        f"{os.getenv('DATABASE_PASSWORD')}@{os.getenv('DATABASE_HOST')}/" \
-        f"{os.getenv('DATABASE')}?ssl_ca=ca-certificates.crt&ssl_mode=VERIFY_IDENTITY"
-    )
 
     query = f'''SELECT
         spx30.Datetime AS Datetime,
@@ -44,41 +33,10 @@ def get_intra(periods_30m = 1):
         spx30.Datetime > '{data_start_date}'
 
     '''
-    # spx30 = pd.read_sql_query(f'SELECT * FROM SPX_full_30min WHERE Datetime > {data_start_date}', con=engine)
-    # vix30 = pd.read_sql_query(f'SELECT * FROM VIX_full_30min WHERE Datetime > {data_start_date}', con=engine)
-    # vvix30 = pd.read_sql_query(f'SELECT * FROM VVIX_full_30min WHERE Datetime > {data_start_date}', con=engine)
-    # dfs = []
 
     df_30m = pd.read_sql_query(sql=query, con=engine.connect())
     df_30m['Datetime'] = df_30m['Datetime'].dt.tz_localize('America/New_York')
     df_30m = df_30m.set_index('Datetime',drop=True)
-
-    # for fr in [spx30, vix30, vvix30]:
-    #     # fr['Datetime'] = fr['Datetime'].apply(lambda x: datetime.datetime.strptime(x[:-6], dt_format))
-    #     fr['Datetime'] = fr['Datetime'].dt.tz_localize('America/New_York')
-    #     fr = fr.set_index('Datetime')
-    #     fr['Open'] = pd.to_numeric(fr['Open'])
-    #     fr['High'] = pd.to_numeric(fr['High'])
-    #     fr['Low'] = pd.to_numeric(fr['Low'])
-    #     fr['Close'] = pd.to_numeric(fr['Close'])
-    #     dfs.append(fr[['Open','High','Low','Close']])
-
-    # df_30m = pd.concat(dfs, axis=1)
-
-    # df_30m.columns = [
-    #     'Open30',
-    #     'High30',
-    #     'Low30',
-    #     'Close30',
-    #     'Open_VIX30',
-    #     'High_VIX30',
-    #     'Low_VIX30',
-    #     'Close_VIX30',
-    #     'Open_VVIX30',
-    #     'High_VVIX30',
-    #     'Low_VVIX30',
-    #     'Close_VVIX30'
-    # ]
 
     # Get incremental date
     last_date = df_30m.index.date[-1]
@@ -135,5 +93,3 @@ def get_intra(periods_30m = 1):
 
     df_intra = pd.concat([opens_intra, highs_intra, lows_intra, closes_intra, spx_intra, vix_intra, vvix_intra], axis=1)
     return df_intra
-
-    

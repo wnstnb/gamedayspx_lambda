@@ -2,11 +2,8 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from tqdm import tqdm
-import os
 from pandas.tseries.offsets import BDay
-from sqlalchemy import create_engine
-from dotenv import load_dotenv
-load_dotenv()
+from dbConn import engine
 
 data_start_date = '2018-07-01'
 
@@ -20,13 +17,6 @@ def get_daily(mode='daily', periods_30m=None):
     vix = yf.Ticker('^VIX')
     vvix = yf.Ticker('^VVIX')
     spx = yf.Ticker('^GSPC')
-
-    # Grab data from db
-    engine = create_engine(
-        f"mysql+mysqldb://{os.getenv('DATABASE_USERNAME')}:" \
-        f"{os.getenv('DATABASE_PASSWORD')}@{os.getenv('DATABASE_HOST')}/" \
-        f"{os.getenv('DATABASE')}?ssl_ca=ca-certificates.crt&ssl_mode=VERIFY_IDENTITY"
-    )
 
     query = f'''SELECT
         spx.Datetime AS Datetime,
@@ -265,12 +255,6 @@ def get_daily(mode='daily', periods_30m=None):
             probas.append(p)
 
         data['GreenProbas'] = probas
-
-    engine = create_engine(
-        f"mysql+mysqldb://{os.getenv('DATABASE_USERNAME')}:" \
-        f"{os.getenv('DATABASE_PASSWORD')}@{os.getenv('DATABASE_HOST')}/" \
-        f"{os.getenv('DATABASE')}?ssl_ca=ca-certificates.crt&ssl_mode=VERIFY_IDENTITY"
-    )
 
     df_releases = pd.read_sql_query('select * from releases', con=engine)
     df_releases = df_releases.set_index('Datetime')
