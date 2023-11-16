@@ -61,7 +61,7 @@ def lambda_handler(periods_30m):
     calib_scores = np.abs(df_results['Predicted'].iloc[:-1] - 0.5)
     score = abs(pct - 0.5)
     pv = np.mean(calib_scores >= score)
-    asof = datetime.combine(data.index[-1], time(9,30)) + (periods_30m * timedelta(minutes=30)) 
+    asof = datetime.datetime.combine(data.index[-1], time(9,30)) + (periods_30m * timedelta(minutes=30)) 
 
     blob = {
         'Datetime': str(res.index[-1]),
@@ -86,13 +86,14 @@ if __name__ == '__main__':
     # Code that, based on the time of the day, return which data/model to run
     game_time = is_trading_day_and_time()
     if game_time:
-        now = datetime.now()
+        now = datetime.datetime.now()
         # Change this for debugging -- should be EST
-        morning_start = datetime.combine(now.date(), time(9, 30))
+        morning_start = datetime.datetime.combine(now.date(), time(9, 30))
         delta = now - morning_start
+        print(delta)
         intervals = max(1,min((delta.total_seconds() / 60 / 30) // 1, 12))
         print(f'running for {str(intervals)}')
-        j = lambda_handler(intervals)
+        j = lambda_handler(0)
     else:
         print("It's either a weekend, a holiday, or outside RTH. Do not run the script.")
 
