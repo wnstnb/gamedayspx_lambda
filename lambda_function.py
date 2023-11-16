@@ -103,8 +103,8 @@ def lambda_handler(periods_30m):
     df_write = pd.DataFrame.from_dict({k:[v] for k, v in blob.items()})
     cursor = connection.cursor()
     insert_dataframe_to_sql('results', df_write, cursor)
-    cursor.close()
-    connection.close()
+    # cursor.close()
+    # connection.close()
 
     return blob
 
