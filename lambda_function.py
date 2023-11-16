@@ -2,15 +2,38 @@
 from getDailyData import get_daily
 from model_intra_v3 import walk_forward_validation
 from model_day_v2 import walk_forward_validation_seq as walk_forward_validation_daily
-from datetime import timedelta
 import pandas as pd
 import json
 from dbConn import connection, engine, insert_dataframe_to_sql
 import numpy as np
-import datetime
-from datetime import time
+from datetime import time, timedelta
 import datetime
 from pandas.tseries.offsets import BDay
+import holidays
+
+def is_trading_day_and_time():
+    # Get the current local time (assuming the machine is set to EST)
+    now = datetime.datetime.now()
+
+    # Check if today is a weekend (Saturday=5, Sunday=6)
+    if now.weekday() >= 5:
+        return False
+
+    # Check if today is a US public holiday
+    us_holidays = holidays.US()
+    if now.date() in us_holidays:
+        return False
+
+    # Define trading hours (9:30 AM to 4:00 PM)
+    start_time = datetime.time(9, 30, 0)
+    end_time = datetime.time(16, 0, 0)
+
+    # Check if current time is within trading hours
+    if now.time() >= start_time and now.time() <= end_time:
+        return True
+    else:
+        return False
+
 
 def lambda_handler(periods_30m):
     if periods_30m > 0:
@@ -61,14 +84,18 @@ def lambda_handler(periods_30m):
 
 if __name__ == '__main__':
     # Code that, based on the time of the day, return which data/model to run
-    from datetime import datetime, time
-    now = datetime.now()
-    # Change this for debugging -- should be EST
-    morning_start = datetime.combine(now.date(), time(9, 30))
-    delta = now - morning_start
-    intervals = max(1,min((delta.total_seconds() / 60 / 30) // 1, 12))
-    print(f'running for {str(intervals)}')
-    j = lambda_handler(intervals)
+    game_time = is_trading_day_and_time()
+    if game_time:
+        now = datetime.now()
+        # Change this for debugging -- should be EST
+        morning_start = datetime.combine(now.date(), time(9, 30))
+        delta = now - morning_start
+        intervals = max(1,min((delta.total_seconds() / 60 / 30) // 1, 12))
+        print(f'running for {str(intervals)}')
+        j = lambda_handler(intervals)
+    else:
+        print("It's either a weekend, a holiday, or outside RTH. Do not run the script.")
+
     # times_list = np.arange(0,13)
     # for i in times_list: 
     #     j = lambda_handler(i)
