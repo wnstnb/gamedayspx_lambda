@@ -106,7 +106,7 @@ def lambda_handler(periods_30m):
     cursor.close()
     connection.close()
 
-    return json.loads(json.dumps(blob))
+    return blob
 
 if __name__ == '__main__':
     # Code that, based on the time of the day, return which data/model to run
