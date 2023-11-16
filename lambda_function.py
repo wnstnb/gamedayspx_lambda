@@ -93,7 +93,7 @@ if __name__ == '__main__':
         print(delta)
         intervals = max(1,min((delta.total_seconds() / 60 / 30) // 1, 12))
         print(f'running for {str(intervals)}')
-        j = lambda_handler(0)
+        j = lambda_handler(intervals)
     else:
         print("It's either a weekend, a holiday, or outside RTH. Do not run the script.")
 
