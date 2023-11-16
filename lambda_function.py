@@ -12,6 +12,8 @@ from datetime import time, timedelta
 import datetime
 from pandas.tseries.offsets import BDay
 import holidays
+from dotenv import load_dotenv
+load_dotenv()
 
 def is_trading_day_and_time():
     # Get the current local time (assuming the machine is set to EST)
