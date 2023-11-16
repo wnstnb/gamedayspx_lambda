@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Function should get the data and run the whole model, return a single prediction based on the time
 from getDailyData import get_daily
 from model_intra_v3 import walk_forward_validation
@@ -30,6 +32,28 @@ def is_trading_day_and_time():
 
     # Check if current time is within trading hours
     if now.time() >= start_time and now.time() <= end_time:
+        return True
+    else:
+        return False
+    
+def is_refresh_time():
+    # Get the current local time (assuming the machine is set to EST)
+    now = datetime.datetime.now()
+
+    # Check if today is a weekend (Saturday=5, Sunday=6)
+    if now.weekday() >= 5:
+        return False
+
+    # Check if today is a US public holiday
+    us_holidays = holidays.US()
+    if now.date() in us_holidays:
+        return False
+
+    # Define trading hours (9:30 AM to 4:00 PM)
+    refresh_time = datetime.time(16, 15, 0)
+
+    # Check if current time is within trading hours
+    if now.time() >= refresh_time:
         return True
     else:
         return False
@@ -85,6 +109,7 @@ def lambda_handler(periods_30m):
 if __name__ == '__main__':
     # Code that, based on the time of the day, return which data/model to run
     game_time = is_trading_day_and_time()
+    refresh_time = is_refresh_time()
     if game_time:
         now = datetime.datetime.now()
         # Change this for debugging -- should be EST
@@ -94,10 +119,10 @@ if __name__ == '__main__':
         intervals = max(1,min((delta.total_seconds() / 60 / 30) // 1, 12))
         print(f'running for {str(intervals)}')
         j = lambda_handler(intervals)
+    elif refresh_time:
+        times_list = np.arange(0,13)
+        for i in times_list: 
+            j = lambda_handler(i)
+            # print(j)
     else:
         print("It's either a weekend, a holiday, or outside RTH. Do not run the script.")
-
-    # times_list = np.arange(0,13)
-    # for i in times_list: 
-    #     j = lambda_handler(i)
-    #     print(j)
