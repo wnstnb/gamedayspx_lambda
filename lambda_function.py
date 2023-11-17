@@ -110,15 +110,15 @@ def lambda_handler(periods_30m):
 
 if __name__ == '__main__':
     # Code that, based on the time of the day, return which data/model to run
-    game_time = is_trading_day_and_time()
-    refresh_time = is_refresh_time()
+    game_time = False # is_trading_day_and_time()
+    refresh_time = True # is_refresh_time()
     if game_time:
         now = datetime.datetime.now()
         # Change this for debugging -- should be EST
         morning_start = datetime.datetime.combine(now.date(), time(9, 30))
         delta = now - morning_start
         print(delta)
-        intervals = max(0,min((delta.total_seconds() / 60 / 30) // 1, 12))
+        intervals = 7 # max(0,min((delta.total_seconds() / 60 / 30) // 1, 12))
         print(f'running for {str(intervals)}')
         j = lambda_handler(intervals)
     elif refresh_time:
