@@ -14,3 +14,5 @@ mysqlclient
 sqlalchemy<2.0
 python-dotenv
 scikit-learn
+plotly
+streamlit
