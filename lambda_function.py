@@ -118,7 +118,7 @@ if __name__ == '__main__':
         morning_start = datetime.datetime.combine(now.date(), time(9, 30))
         delta = now - morning_start
         print(delta)
-        intervals = max(1,min((delta.total_seconds() / 60 / 30) // 1, 12))
+        intervals = max(0,min((delta.total_seconds() / 60 / 30) // 1, 12))
         print(f'running for {str(intervals)}')
         j = lambda_handler(intervals)
     elif refresh_time:
