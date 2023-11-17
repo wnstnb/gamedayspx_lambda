@@ -10,7 +10,7 @@ json5
 jsonschema
 holidays
 pytz
-mysqlclient<2.2
+mysqlclient
 sqlalchemy<2.0
 python-dotenv
 scikit-learn
