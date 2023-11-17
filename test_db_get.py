@@ -23,4 +23,5 @@ def test_db():
 
 if __name__ == '__main__':
     p = test_db()
-    print(p)
+    with open("/home/ec2-user/logfile.log", "a") as file:
+        file.write(f"Cron job ran at {datetime.datetime.now()}\n{str(p)}")
