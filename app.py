@@ -67,7 +67,7 @@ chartOptions = [{
             "top": 0.2,
             "bottom": 0.25,
         },
-        "borderVisible": False,
+        "borderVisible": True,
     },
     "layout": {
         "textColor": 'white',
