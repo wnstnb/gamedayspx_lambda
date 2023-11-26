@@ -135,6 +135,8 @@ def get_daily(mode='daily', periods_30m=None):
 
     # Target for clf -- whether tomorrow will close above or below today's close
     data['Target_clf'] = data['Close'] > data['PrevClose']
+    data['ClosePct'] = (data['Close'] / data['PrevClose']) - 1
+    data['ClosePct'] =  data['ClosePct'].shift(-1)
     data['Target_clf'] = data['Target_clf'].shift(-1)
     data['DayOfWeek'] = pd.to_datetime(data.index)
     data['Quarter'] = data['DayOfWeek'].dt.quarter
@@ -297,8 +299,9 @@ def get_daily(mode='daily', periods_30m=None):
 
     elif mode=='intra':
         from intraCols import model_cols
+        from regrCols import model_cols as regr_cols
 
-    df_final = data.loc[:final_row, model_cols + ['Target', 'Target_clf']]
+    df_final = data.loc[:final_row, model_cols + ['Target', 'Target_clf', 'ClosePct']]
     df_final = df_final.dropna(subset=['Target','Target_clf'])
     # df_final = df_final.dropna(subset=['Target','Target_clf','Perf5Day_n1'])
     return data, df_final, final_row

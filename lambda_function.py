@@ -4,6 +4,8 @@
 from getDailyData import get_daily
 from model_intra_v3 import walk_forward_validation
 from model_day_v2 import walk_forward_validation_seq as walk_forward_validation_daily
+from model_regr_v2 import walk_forward_validation as walk_forward_validation_regr
+from model_regr_v2 import calc_upper_lower
 import pandas as pd
 import json
 from dbConn import connection, engine, insert_dataframe_to_sql
@@ -64,13 +66,19 @@ def is_refresh_time():
 def lambda_handler(periods_30m):
     if periods_30m > 0:
         data, df_final, final_row = get_daily(mode='intra', periods_30m=periods_30m)
+        # Regression model
         res, _ = walk_forward_validation(df_final.drop(columns=['Target']).dropna(), 'Target_clf', 1, mode='single')
+        regr_res, _ = walk_forward_validation_regr(df_final[['CurrentClose30toClose','ClosePct']].dropna(), 'ClosePct', 1, mode='single')
+        df_regr_results = pd.read_sql_query(f'select * from reg_results where ModelNum = {str(periods_30m)}', con = engine)
+        regr_pct = regr_res['Predicted'].iloc[-1]
+        upper, lower = calc_upper_lower(regr_pct, df_regr_results, alpha=0.05)
 
     elif periods_30m == 0:
         data, df_final, final_row = get_daily()
         res, _, _ = walk_forward_validation_daily(df_final.dropna(), 'Target_clf', 'Target', 200, 1)
-    
+
     # Get results, run calibration and pvalue    
+
     df_results = pd.read_sql_query(f'select * from results where ModelNum = {str(periods_30m)}', con = engine)
 
     # Calibrate Probabilities
@@ -103,6 +111,20 @@ def lambda_handler(periods_30m):
     df_write = pd.DataFrame.from_dict({k:[v] for k, v in blob.items()})
     cursor = connection.cursor()
     insert_dataframe_to_sql('results', df_write, cursor)
+
+    if periods_30m > 0:
+        regr_blob = {
+            'Datetime': str(res.index[-1]),
+            'IsTrue':df_final['ClosePct'].iloc[-1],
+            'Predicted': regr_pct,
+            'Upper': upper,
+            'Lower':lower,
+            'ModelNum':periods_30m,
+            'AsOf':str(asof)
+        }
+        df_write_reg = pd.DataFrame.from_dict({k:[v] for k, v in regr_blob.items()})
+        insert_dataframe_to_sql('reg_results', df_write_reg, cursor)
+
     # cursor.close()
     # connection.close()
 
@@ -110,15 +132,15 @@ def lambda_handler(periods_30m):
 
 if __name__ == '__main__':
     # Code that, based on the time of the day, return which data/model to run
-    game_time = False # is_trading_day_and_time()
-    refresh_time = True # is_refresh_time()
+    game_time = is_trading_day_and_time()
+    refresh_time = is_refresh_time()
     if game_time:
         now = datetime.datetime.now()
         # Change this for debugging -- should be EST
         morning_start = datetime.datetime.combine(now.date(), time(9, 30))
         delta = now - morning_start
         print(delta)
-        intervals = 7 # max(0,min((delta.total_seconds() / 60 / 30) // 1, 12))
+        intervals = max(0,min((delta.total_seconds() / 60 / 30) // 1, 12))
         print(f'running for {str(intervals)}')
         j = lambda_handler(intervals)
     elif refresh_time:
