@@ -33,7 +33,18 @@ engine = create_engine(
         f"{os.getenv('DATABASE')}?ssl_ca=ca-certificates.crt&ssl_mode=VERIFY_IDENTITY"
     )
 
-q = f'''SELECT AsOf, Predicted, CalibPredicted, Pvalue, ModelNum FROM results where AsOf >= '{date_select}'
+q = f'''SELECT 
+            r.AsOf, 
+            r.Predicted, 
+            r.CalibPredicted, 
+            r.Pvalue, 
+            r.ModelNum,
+            p.Predicted AS reg_pred,
+            p.Upper,
+            p.Lower
+            FROM results r
+            LEFT JOIN reg_results p ON r.AsOf = p.AsOf 
+            where r.AsOf >= '{date_select}'
 '''
 
 df_all_results = pd.read_sql_query(q, con=engine.connect())
@@ -52,8 +63,9 @@ df1 = df1.loc[df1.index > str(date_select)]
 dts = df1.groupby(df1.index.date).head(1).reset_index()['AsOf']
 daily_closes = data_daily.loc[df1.index.date, 'PrevClose'].drop_duplicates().reset_index()
 daily_closes['FirstBar'] = dts
-levels = data_daily.loc[df1.index.date, ['H1','H2','L1','L2','Open']].drop_duplicates().reset_index()
+levels = data_daily.loc[df1.index.date, ['H1','H2','L1','L2','Open','PrevClose']].drop_duplicates().reset_index()
 levels['FirstBar'] = dts
+levels['time'] = levels['FirstBar'].apply(lambda x: x.timestamp())
 
 # Plot
 
@@ -72,10 +84,12 @@ COLOR_BEAR = '#ff5f5f'  # #ef5350
 # Some data wrangling to match required format
 df = df1.copy()
 df['time'] = [dt.timestamp() for dt in df.index]
-df = df[['time','Open','High','Low','Close','CalibPredicted','Color']]
-df.columns = ['time','open','high','low','close','volume','color']                  # rename columns
-# df['color'] = np.where(  df['open'] > df['close'], COLOR_BEAR, COLOR_BULL)  # bull or bear
-
+df = df[['time','Open','High','Low','Close','CalibPredicted','Color','Upper','Lower']].bfill()
+df.columns = ['time','open','high','low','close','volume','color','Upper','Lower']                  # rename columns
+df = df.merge(levels, how = 'left', on = 'time')
+df[['H1','H2','L1','L2','Open','PrevClose']] = df[['H1','H2','L1','L2','Open','PrevClose']].ffill()
+df['UpperP'] = (df['Upper'] + 1) * df['PrevClose']
+df['LowerP'] = (df['Lower'] + 1) * df['PrevClose']
 # export to JSON format
 # candles = json.loads(df.to_json(orient = "records"))
 candles = json.loads(json.dumps([
@@ -83,12 +97,40 @@ candles = json.loads(json.dumps([
          "high": high, 
          "low": low, 
          "close": close, 
-         "time": dt.timestamp()} for open, high, low, close, dt in zip(df1['Open'],df1['High'],df1['Low'],df1['Close'], df1.index)
+         "time": dt} for open, high, low, close, dt in zip(df['open'],df['high'],df['low'],df['close'], df['time'])
     ], indent=2))
 # volume = json.loads(df.rename(columns={"volume": "value",}).to_json(orient = "records"))
 volume = json.loads(json.dumps([
-        { "value": pred, "time": dt.timestamp(), "color":color  } for pred, dt, color in zip(df1['CalibPredicted'], df1.index, df1['Color'])
+        { "value": pred, "time": dt, "color":color  } for pred, dt, color in zip(df['volume'], df['time'], df['color'])
     ], indent=2))
+
+h1 = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['H1'], df['time'])
+    ], indent=2))
+
+h2 = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['H2'], df['time'])
+    ], indent=2))
+
+opens = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['Open'], df['time'])
+    ], indent=2)) 
+
+l1 = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['L1'], df['time'])
+    ], indent=2)) 
+    
+l2 = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['L2'], df['time'])
+    ], indent=2)) 
+
+uppers = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['UpperP'], df['time'])
+    ], indent=2)) 
+
+lowers = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['LowerP'], df['time'])
+    ], indent=2)) 
 
 chartMultipaneOptions = [
     {
@@ -103,10 +145,10 @@ chartMultipaneOptions = [
         },
         "grid": {
             "vertLines": {
-                "color": "rgba(197, 203, 206, 0.25)"
+                "color": "rgba(197, 203, 206, 0)"
                 },
             "horzLines": {
-                "color": "rgba(197, 203, 206, 0.25)"
+                "color": "rgba(197, 203, 206, 0)"
             }
         },
         "crosshair": {
@@ -118,14 +160,6 @@ chartMultipaneOptions = [
         "timeScale": {
             "borderColor": "rgba(197, 203, 206, 0.8)",
             "barSpacing": 15
-        },
-        "watermark": {
-            "visible": True,
-            "fontSize": 48,
-            "horzAlign": 'center',
-            "vertAlign": 'center',
-            "color": 'rgba(171, 71, 188, 0.3)',
-            "text": 'AAPL - D1',
         }
     },
     {
@@ -148,14 +182,6 @@ chartMultipaneOptions = [
         },
         "timeScale": {
             "visible": False,
-        },
-        "watermark": {
-            "visible": True,
-            "fontSize": 18,
-            "horzAlign": 'left',
-            "vertAlign": 'top',
-            "color": 'rgba(171, 71, 188, 0.7)',
-            "text": 'Volume',
         }
     },
     {
@@ -193,7 +219,82 @@ seriesCandlestickChart = [
             "wickUpColor": COLOR_BULL,
             "wickDownColor": COLOR_BEAR
         }
-    }
+    },
+    {
+        "type": 'Line',
+        "data": h1,
+        "options": {
+            "color": '#ffb8b8',
+            "lineWidth": 1,
+            "lineType": 1,
+            "lineStyle": 4,
+            "priceLineVisible": False
+        }
+    },
+    {
+        "type": 'Line',
+        "data": h2,
+        "options": {
+            "color": '#ffb8b8',
+            "lineWidth": 1,
+            "lineType": 1,
+            "lineStyle": 4,
+            "priceLineVisible": False
+        }
+    },
+    {
+        "type": 'Line',
+        "data": opens,
+        "options": {
+            "color": '#ffffff',
+            "lineWidth": 1,
+            "lineType": 1,
+            "lineStyle": 4,
+            "priceLineVisible": False
+        }
+    },
+    {
+        "type": 'Line',
+        "data": l1,
+        "options": {
+            "color": '#96cbff',
+            "lineWidth": 1,
+            "lineType": 1,
+            "lineStyle": 4,
+            "priceLineVisible": False
+        }
+    },
+    {
+        "type": 'Line',
+        "data": l2,
+        "options": {
+            "color": '#96cbff',
+            "lineWidth": 1,
+            "lineType": 1,
+            "lineStyle": 4,
+            "priceLineVisible": False
+        }
+    },
+    # {
+    #     "type": 'Line',
+    #     "data": uppers,
+    #     "options": {
+    #         "color": '#ffffff',
+    #         "lineWidth": 1,
+    #         "lineType": 0,
+    #         "priceLineVisible": False
+    #     }
+    # },
+    # {
+    #     "type": 'Line',
+    #     "data": lowers,
+    #     "options": {
+    #         "color": '#ffffff',
+    #         "lineWidth": 1,
+    #         "lineType": 0,
+    #         "priceLineVisible": False
+    #     }
+    # }
 ]
 
 seriesVolumeChart = [
