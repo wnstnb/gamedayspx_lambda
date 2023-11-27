@@ -56,107 +56,283 @@ levels = data_daily.loc[df1.index.date, ['H1','H2','L1','L2','Open']].drop_dupli
 levels['FirstBar'] = dts
 
 # Plot
+
 import streamlit as st
 from streamlit_lightweight_charts import renderLightweightCharts
 
-chartOptions = [{
-    "width":800,
-    "height":400,
-    "rightPriceScale": {
-        "scaleMargins": {
-            "top": 0.2,
-            "bottom": 0.25,
-        },
-        "borderVisible": True,
-    },
-    "layout": {
-        "textColor": 'white',
-        "background": {
-            "type": 'solid',
-            "color": 'black'
-        },
-    },
-    "grid": {
-        "vertLines": {
-            "color": "rgba(197, 203, 206, 0)"
-            },
-        "horzLines": {
-            "color": "rgba(197, 203, 206, 0)"
-        }
-    }
-},
-{
-    "width":800,
-    "height":125,
-    "layout": {
-        "textColor": 'white',
-        "background": {
-            "type": 'solid',
-            "color": 'black'
-        },
-    },
-    "grid": {
-            "vertLines": {
-                "color": "rgba(197, 203, 206, 0)"
-                },
-            "horzLines": {
-                "color": "rgba(197, 203, 206, 0)"
-            }
-        },
-},]
+import json
+import numpy as np
+import yfinance as yf
+import pandas as pd
 
-seriesCandlestickChart = [{
-    
-    "type": 'Candlestick',
-    "data": [
+COLOR_BULL = '#3399ff' # #26a69a
+COLOR_BEAR = '#ff5f5f'  # #ef5350
+
+
+# Some data wrangling to match required format
+df = df1.copy()
+df['time'] = [dt.timestamp() for dt in df.index]
+df = df[['time','Open','High','Low','Close','CalibPredicted','Color']]
+df.columns = ['time','open','high','low','close','volume','color']                  # rename columns
+# df['color'] = np.where(  df['open'] > df['close'], COLOR_BEAR, COLOR_BULL)  # bull or bear
+
+# export to JSON format
+# candles = json.loads(df.to_json(orient = "records"))
+candles = json.loads(json.dumps([
         {"open": open, 
          "high": high, 
          "low": low, 
          "close": close, 
          "time": dt.timestamp()} for open, high, low, close, dt in zip(df1['Open'],df1['High'],df1['Low'],df1['Close'], df1.index)
-    ],
-    "options": {
-        "upColor": '#3399ff',
-        "downColor": '#ff5f5f',
-        "borderVisible": False,
-        "wickUpColor": '#3399ff',
-        "wickDownColor": '#ff5f5f',
-        "priceScaleVisible": True
+    ], indent=2))
+# volume = json.loads(df.rename(columns={"volume": "value",}).to_json(orient = "records"))
+volume = json.loads(json.dumps([
+        { "value": pred, "time": dt.timestamp(), "color":color  } for pred, dt, color in zip(df1['CalibPredicted'], df1.index, df1['Color'])
+    ], indent=2))
+
+chartMultipaneOptions = [
+    {
+        # "width": 600,
+        "height": 400,
+        "layout": {
+            "background": {
+                "type": "solid",
+                "color": 'transparent'
+            },
+            "textColor": "white"
+        },
+        "grid": {
+            "vertLines": {
+                "color": "rgba(197, 203, 206, 0.25)"
+                },
+            "horzLines": {
+                "color": "rgba(197, 203, 206, 0.25)"
+            }
+        },
+        "crosshair": {
+            "mode": 0
+        },
+        "priceScale": {
+            "borderColor": "rgba(197, 203, 206, 0.8)"
+        },
+        "timeScale": {
+            "borderColor": "rgba(197, 203, 206, 0.8)",
+            "barSpacing": 15
+        },
+        "watermark": {
+            "visible": True,
+            "fontSize": 48,
+            "horzAlign": 'center',
+            "vertAlign": 'center',
+            "color": 'rgba(171, 71, 188, 0.3)',
+            "text": 'AAPL - D1',
+        }
     },
-    "priceScale": {
-        "scaleMargins": {
-            "top": 0.7,
-            "bottom": 0,
+    {
+        # "width": 600,
+        "height": 100,
+        "layout": {
+            "background": {
+                "type": 'solid',
+                "color": 'transparent'
+            },
+            "textColor": 'black',
+        },
+        "grid": {
+            "vertLines": {
+                "color": 'rgba(42, 46, 57, 0)',
+            },
+            "horzLines": {
+                "color": 'rgba(42, 46, 57, 0.6)',
+            }
+        },
+        "timeScale": {
+            "visible": False,
+        },
+        "watermark": {
+            "visible": True,
+            "fontSize": 18,
+            "horzAlign": 'left',
+            "vertAlign": 'top',
+            "color": 'rgba(171, 71, 188, 0.7)',
+            "text": 'Volume',
+        }
+    },
+    {
+        "width": 600,
+        "height": 200,
+        "layout": {
+            "background": {
+                "type": "solid",
+                "color": 'white'
+            },
+            "textColor": "black"
+        },
+        "timeScale": {
+            "visible": False,
+        },
+        "watermark": {
+            "visible": True,
+            "fontSize": 18,
+            "horzAlign": 'left',
+            "vertAlign": 'center',
+            "color": 'rgba(171, 71, 188, 0.7)',
+            "text": 'MACD',
         }
     }
-},
-{
-        "type": 'Line',
-        "data": [{"value": value, "time":dt.timestamp()} for value, dt in zip(levels['H1'], levels['FirstBar'])],
-        "options": {
-            "color": 'blue',
-            "lineWidth": 1
-        }
-    }]
+]
 
-seriesPredictions = [{
-    "type": 'Histogram',
-    "data": [
-        { "value": pred, "time": dt.timestamp(), "color":color  } for pred, dt, color in zip(df1['CalibPredicted'], df1.index, df1['Color'])
-    ],
-    "options": { "color": '#26a69a' }
-}]
+seriesCandlestickChart = [
+    {
+        "type": 'Candlestick',
+        "data": candles,
+        "options": {
+            "upColor": COLOR_BULL,
+            "downColor": COLOR_BEAR,
+            "borderVisible": False,
+            "wickUpColor": COLOR_BULL,
+            "wickDownColor": COLOR_BEAR
+        }
+    }
+]
+
+seriesVolumeChart = [
+    {
+        "type": 'Histogram',
+        "data": volume,
+        "options": {
+            "priceFormat": {
+                "type": 'volume',
+            },
+            "priceScaleId": "" # set as an overlay setting,
+        },
+        "priceScale": {
+            "scaleMargins": {
+                "top": 0,
+                "bottom": 0,
+            },
+            "alignLabels": False
+        }
+    }
+]
 
 renderLightweightCharts([
     {
-        "chart": chartOptions[0],
+        "chart": chartMultipaneOptions[0],
         "series": seriesCandlestickChart
     },
     {
-        "chart": chartOptions[1],
-        "series": seriesPredictions
-    },
+        "chart": chartMultipaneOptions[1],
+        "series": seriesVolumeChart
+    }
 ], 'multipane')
+# import streamlit as st
+# from streamlit_lightweight_charts import renderLightweightCharts
+
+# chartOptions = [{
+#     "width":800,
+#     "height":400,
+#     "rightPriceScale": {
+#         "scaleMargins": {
+#             "top": 0.2,
+#             "bottom": 0.25,
+#         },
+#         "borderVisible": False,
+#     },
+#     "overlayPriceScales": {
+#         "scaleMargins": {
+#             "top": 0.7,
+#             "bottom": 0,
+#         }
+#     },
+#     "layout": {
+#         "textColor": 'white',
+#         "background": {
+#             "type": 'solid',
+#             "color": 'black'
+#         },
+#     },
+#     "grid": {
+#         "vertLines": {
+#             "color": "rgba(197, 203, 206, 0)"
+#             },
+#         "horzLines": {
+#             "color": "rgba(197, 203, 206, 0)"
+#         }
+#     }
+# },
+# {
+#     "width":800,
+#     "height":125,
+#     "layout": {
+#         "textColor": 'white',
+#         "background": {
+#             "type": 'solid',
+#             "color": 'black'
+#         },
+#     },
+#     "grid": {
+#             "vertLines": {
+#                 "color": "rgba(197, 203, 206, 0)"
+#                 },
+#             "horzLines": {
+#                 "color": "rgba(197, 203, 206, 0)"
+#             }
+#         },
+# },]
+
+# seriesCandlestickChart = [{
+    
+#     "type": 'Candlestick',
+#     "data": [
+#         {"open": open, 
+#          "high": high, 
+#          "low": low, 
+#          "close": close, 
+#          "time": dt.timestamp()} for open, high, low, close, dt in zip(df1['Open'],df1['High'],df1['Low'],df1['Close'], df1.index)
+#     ],
+#     "options": {
+#         "upColor": '#3399ff',
+#         "downColor": '#ff5f5f',
+#         "borderVisible": False,
+#         "wickUpColor": '#3399ff',
+#         "wickDownColor": '#ff5f5f',
+#         "priceScaleVisible": True
+#     },
+#     "priceScale": {
+#         "scaleMargins": {
+#             "top": 0.7,
+#             "bottom": 0,
+#         }
+#     }
+# },
+# {
+#         "type": 'Line',
+#         "data": [{"value": value, "time":dt.timestamp()} for value, dt in zip(levels['H1'], levels['FirstBar'])],
+#         "options": {
+#             "color": 'blue',
+#             "lineWidth": 1
+#         }
+#     }]
+
+# seriesPredictions = [{
+#     "type": 'Histogram',
+#     "data": [
+#         { "value": pred, "time": dt.timestamp(), "color":color  } for pred, dt, color in zip(df1['CalibPredicted'], df1.index, df1['Color'])
+#     ],
+#     "options": { "color": '#26a69a' }
+# }]
+
+# renderLightweightCharts([
+#     {
+#         "chart": chartOptions[0],
+#         "series": seriesCandlestickChart
+#     },
+#     {
+#         "chart": chartOptions[1],
+#         "series": seriesPredictions
+#     },
+# ], 'multipane')
 
 # Important levels
 df_levels = pd.DataFrame(levels[['H2','H1','Open','L1','L2']].iloc[-1]).round(2)
