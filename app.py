@@ -105,7 +105,7 @@ df['LowerP'] = (df['Lower'] + 1) * df['PrevClose']
 
 chart = StreamlitChart(
     height=350,
-    width=700,
+    # width=700,
     scale_candles_only=True,
     )
 chart.layout(background_color='rgba(214, 237, 255, 0)', 
