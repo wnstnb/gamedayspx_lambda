@@ -16,4 +16,4 @@ python-dotenv
 scikit-learn
 plotly
 streamlit
-streamlit-lightweight-charts
+lightweight-charts
