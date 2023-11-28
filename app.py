@@ -60,11 +60,16 @@ df_all_results2['PredDir'] = df_all_results2['Predicted'].apply(lambda x: 'Up' i
 df1 = df_all_results2.set_index('AsOf')
 df1 = df1.loc[df1.index > str(date_select)]
 
+import pytz
+est = pytz.timezone('US/Eastern')
+utc = pytz.utc
+
 dts = df1.groupby(df1.index.date).head(1).reset_index()['AsOf']
 daily_closes = data_daily.loc[df1.index.date, 'PrevClose'].drop_duplicates().reset_index()
 daily_closes['FirstBar'] = dts
 levels = data_daily.loc[df1.index.date, ['H1','H2','L1','L2','Open','PrevClose']].drop_duplicates().reset_index()
 levels['FirstBar'] = dts
+# levels['time'] = [dt.astimezone(est) for dt in levels['FirstBar']]
 levels['time'] = levels['FirstBar'].apply(lambda x: x.timestamp())
 
 # Plot
@@ -77,18 +82,21 @@ import numpy as np
 import yfinance as yf
 import pandas as pd
 
-COLOR_BULL = '#3399ff' # #26a69a
-COLOR_BEAR = '#ff5f5f'  # #ef5350
+
+COLOR_BULL = '#ffffff' # #26a69a
+COLOR_BEAR = '#787b86'  # #ef5350
 
 
 # Some data wrangling to match required format
 df = df1.copy()
 df['time'] = [dt.timestamp() for dt in df.index]
-df = df[['time','Open','High','Low','Close','CalibPredicted','Color','Upper','Lower']].bfill()
-df.columns = ['time','open','high','low','close','volume','color','Upper','Lower']                  # rename columns
+df = df[['time','Open','High','Low','Close','CalibPredicted','Color','Upper','Lower','reg_pred']].bfill()
+df.columns = ['time','open','high','low','close','volume','color','Upper','Lower','reg_pred']                  # rename columns
 df = df.merge(levels, how = 'left', on = 'time')
+# df['time'] = [dt.timestamp() for dt in df['time']]
 df[['H1','H2','L1','L2','Open','PrevClose']] = df[['H1','H2','L1','L2','Open','PrevClose']].ffill()
 df['UpperP'] = (df['Upper'] + 1) * df['PrevClose']
+df['RegPred'] = (df['reg_pred'] + 1) * df['PrevClose']
 df['LowerP'] = (df['Lower'] + 1) * df['PrevClose']
 # export to JSON format
 # candles = json.loads(df.to_json(orient = "records"))
@@ -132,10 +140,18 @@ lowers = json.loads(json.dumps([
         { "value": h1, "time": dt  } for h1, dt in zip(df['LowerP'], df['time'])
     ], indent=2)) 
 
+regPreds = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['RegPred'], df['time'])
+    ], indent=2)) 
+
+prevCloses = json.loads(json.dumps([
+        { "value": h1, "time": dt  } for h1, dt in zip(df['PrevClose'], df['time'])
+    ], indent=2)) 
+
 chartMultipaneOptions = [
     {
         # "width": 600,
-        "height": 400,
+        "height": 300,
         "layout": {
             "background": {
                 "type": "solid",
@@ -155,16 +171,23 @@ chartMultipaneOptions = [
             "mode": 0
         },
         "priceScale": {
-            "borderColor": "rgba(197, 203, 206, 0.8)"
+            "borderColor": "rgba(197, 203, 206, 0.8)",
+            "autoScale": True,
+            "scaleMargins": {
+                "above": 0,
+                "below": 0
+            },
+            "alignLabels": True
         },
         "timeScale": {
             "borderColor": "rgba(197, 203, 206, 0.8)",
-            "barSpacing": 15
+            "barSpacing": 15,
+            "timeVisible": True
         }
     },
     {
         # "width": 600,
-        "height": 100,
+        "height": 75,
         "layout": {
             "background": {
                 "type": 'solid',
@@ -181,7 +204,7 @@ chartMultipaneOptions = [
             }
         },
         "timeScale": {
-            "visible": False,
+            "visible": True,
         }
     },
     {
@@ -249,7 +272,7 @@ seriesCandlestickChart = [
             "color": '#ffffff',
             "lineWidth": 1,
             "lineType": 1,
-            "lineStyle": 4,
+            "lineStyle": 0,
             "priceLineVisible": False
         }
     },
@@ -272,19 +295,36 @@ seriesCandlestickChart = [
             "lineWidth": 1,
             "lineType": 1,
             "lineStyle": 4,
+            "priceLineVisible": False,
+        }
+    },
+    {
+        "type": 'Line',
+        "data": prevCloses,
+        "options": {
+            "color": '#cccccc',
+            "lineWidth": 1,
+            "lineType": 1,
+            "lineStyle": 4,
             "priceLineVisible": False
         }
     },
-    # {
-    #     "type": 'Line',
-    #     "data": uppers,
-    #     "options": {
-    #         "color": '#ffffff',
-    #         "lineWidth": 1,
-    #         "lineType": 0,
-    #         "priceLineVisible": False
-    #     }
-    # },
+    {
+        "type": 'Histogram',
+        "data": volume,
+        "options": {
+            "priceFormat": {
+                "type": 'volume',
+            },
+            "priceScaleId": "" # set as an overlay setting,
+        },
+        "priceScale": {
+            "scaleMargins": {
+                "top": 0.85,
+                "bottom": 0,
+            },
+        }
+    }
     # {
     #     "type": 'Line',
     #     "data": lowers,
@@ -309,10 +349,10 @@ seriesVolumeChart = [
         },
         "priceScale": {
             "scaleMargins": {
-                "top": 0,
-                "bottom": 0,
+                "top": 0.1,
+                "bottom": 0.1,
             },
-            "alignLabels": False
+            "alignLabels": True
         }
     }
 ]
@@ -321,12 +361,8 @@ renderLightweightCharts([
     {
         "chart": chartMultipaneOptions[0],
         "series": seriesCandlestickChart
-    },
-    {
-        "chart": chartMultipaneOptions[1],
-        "series": seriesVolumeChart
     }
-], 'multipane')
+], 'priceAndVolume')
 # import streamlit as st
 # from streamlit_lightweight_charts import renderLightweightCharts
 
